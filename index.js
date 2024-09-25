@@ -21,6 +21,9 @@ const client = new MongoClient(uri, {
   },
 });
 
+// Utility function to check if a string is a valid ObjectId
+const isValidObjectId = (id) => ObjectId.isValid(id) && new ObjectId(id) == id;
+
 async function run() {
   try {
     // Connect the client to the server (optional starting in v4.7)
@@ -30,13 +33,21 @@ async function run() {
     const cartCollection = client.db("sujuBotanica").collection("carts");
 
     // Products
+
+    // Fetch all products
     app.get("/allProducts", async (req, res) => {
       const result = await productCollection.find().toArray();
       res.send(result);
     });
 
+    // Fetch product by MongoDB _id (ObjectId)
     app.get("/products/:id", async (req, res) => {
       const id = req.params.id;
+
+      // Check if the provided ID is a valid ObjectId
+      if (!isValidObjectId(id)) {
+        return res.status(400).send({ error: "Invalid product ID" });
+      }
 
       const query = { _id: new ObjectId(id) };
       const result = await productCollection.findOne(query);
@@ -44,28 +55,45 @@ async function run() {
       res.send(result);
     });
 
+    // Fetch product by productId (String)
+    app.get("/productByProductId/:productId", async (req, res) => {
+      const productId = req.params.productId;
+
+      // Query by productId (a string, not an ObjectId)
+      const query = { productId: productId };
+      const result = await productCollection.findOne(query);
+
+      res.send(result);
+    });
+
+    // Add new product
     app.post("/products/addProduct", async (req, res) => {
       const item = req.body;
       const result = await productCollection.insertOne(item);
       res.send(result);
     });
 
+    // Update product by _id (ObjectId)
     app.patch("/products/:id", async (req, res) => {
       const item = req.body;
       const id = req.params.id;
+
+      if (!isValidObjectId(id)) {
+        return res.status(400).send({ error: "Invalid product ID" });
+      }
 
       const filter = { _id: new ObjectId(id) };
 
       // Prepare the update document
       const updatedDoc = {
         $set: {
-          title: item.title, // Update to match frontend field names
+          title: item.title,
           details: item.details,
           price: item.price,
           quantity: item.quantity,
           rating: item.rating,
-          category: item.category, // Assuming category is sent as a single value; handle accordingly
-          image: item.image, // Assuming image is a URL; handle accordingly
+          category: item.category,
+          image: item.image,
         },
       };
 
@@ -73,29 +101,42 @@ async function run() {
       res.send(result);
     });
 
+    // Delete product by _id (ObjectId)
     app.delete("/products/:id", async (req, res) => {
       const id = req.params.id;
+
+      if (!isValidObjectId(id)) {
+        return res.status(400).send({ error: "Invalid product ID" });
+      }
+
       const query = { _id: new ObjectId(id) };
       const result = await productCollection.deleteOne(query);
       res.send(result);
     });
 
     // Carts
+
+    // Fetch all cart items
     app.get("/carts", async (req, res) => {
-      const email = req.query.email;
-      const query = { email: email };
-      const result = await cartCollection.find(query).toArray();
+      const result = await cartCollection.find().toArray();
       res.send(result);
     });
 
-    app.post("/carts/add", async (req, res) => {
-      const cartItem = req.body;
-      const result = await cartCollection.insertOne(cartItem);
+    // Add item to cart
+    app.post("/carts", async (req, res) => {
+      const item = req.body;
+      const result = await cartCollection.insertOne(item);
       res.send(result);
     });
 
+    // Delete cart item by _id (ObjectId)
     app.delete("/carts/:id", async (req, res) => {
-      const id = req.params.id;
+      const { id } = req.params;
+
+      if (!isValidObjectId(id)) {
+        return res.status(400).send({ error: "Invalid cart ID" });
+      }
+
       const query = { _id: new ObjectId(id) };
       const result = await cartCollection.deleteOne(query);
       res.send(result);
@@ -111,6 +152,7 @@ async function run() {
     // await client.close();
   }
 }
+
 run().catch(console.dir);
 
 app.get("/", (req, res) => {
