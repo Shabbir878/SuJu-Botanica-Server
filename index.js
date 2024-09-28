@@ -160,58 +160,43 @@ async function run() {
       res.send(result);
     });
 
-    // Add item to cart (upsert: add if doesn't exist, update if exists)
+    // POST /carts to add a product to the cart
     app.post("/carts", async (req, res) => {
       const item = req.body;
-      const query = { productId: item.productId };
 
-      // Check if the item exists in the cart
-      const existingItem = await cartCollection.findOne(query);
-      if (existingItem) {
-        // Only update quantity if stock is available
-        if (existingItem.quantity < item.stockQuantity) {
-          const newQuantity = existingItem.quantity + 1;
-          const updateDoc = { $set: { quantity: newQuantity } };
-          const result = await cartCollection.updateOne(query, updateDoc);
-          res.send(result);
-        } else {
-          res.status(400).send({ error: "Exceeds available stock" });
-        }
-      } else {
-        // Insert new item if not in cart
-        const result = await cartCollection.insertOne(item);
-        res.send(result);
-      }
-    });
+      // Upsert logic: add if not exists, update if exists
+      const query = { productId: item.productId }; // Adjust based on your cart structure
+      const update = { $set: item, $setOnInsert: { createdAt: new Date() } }; // Include timestamp if needed
+      const options = { upsert: true };
 
-    // Update cart item quantity by _id (ObjectId)
-    app.patch("/carts/:id", async (req, res) => {
-      const { id } = req.params;
-      const { quantity } = req.body; // Get new quantity from the request body
-
-      if (!ObjectId.isValid(id)) {
-        return res.status(400).send({ error: "Invalid cart ID" });
-      }
-
-      // Ensure quantity is greater than zero and valid
-      if (quantity <= 0) {
-        return res
-          .status(400)
-          .send({ error: "Quantity must be greater than zero" });
-      }
-
-      const query = { _id: new ObjectId(id) };
-      const updateDoc = { $set: { quantity } };
-      const result = await cartCollection.updateOne(query, updateDoc);
+      const result = await cartCollection.updateOne(query, update, options);
       res.send(result);
     });
 
-    // Delete cart item by _id (ObjectId)
-    app.delete("/carts/:id", async (req, res) => {
-      const { id } = req.params;
+    // PATCH /carts/:id to update the quantity of a cart item
+    app.patch("/carts/:id", async (req, res) => {
+      const { id } = req.params; // Grab the cart item ID from URL
+      const { quantity } = req.body; // Get the new quantity from the request body
+
       if (!ObjectId.isValid(id)) {
         return res.status(400).send({ error: "Invalid cart ID" });
       }
+
+      const query = { _id: new ObjectId(id) };
+      const update = { $set: { quantity } };
+
+      const result = await cartCollection.updateOne(query, update);
+      res.send(result);
+    });
+
+    // DELETE /carts/:id to remove a cart item
+    app.delete("/carts/:id", async (req, res) => {
+      const { id } = req.params;
+
+      if (!ObjectId.isValid(id)) {
+        return res.status(400).send({ error: "Invalid cart ID" });
+      }
+
       const query = { _id: new ObjectId(id) };
       const result = await cartCollection.deleteOne(query);
       res.send(result);
